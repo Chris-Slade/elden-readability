@@ -370,10 +370,17 @@ fn main() -> Result<(), Box<dyn Error>> {
     });
 
     let palette = Palette::for_stdout(args.color);
-    let mut out = BufWriter::new(io::stdout().lock());
-    for scored in results.iter().take(args.limit.unwrap_or(usize::MAX)) {
-        write_entry(&mut out, scored, sort, &palette)?;
+    let shown = &results[..results.len().min(args.limit.unwrap_or(usize::MAX))];
+    match write_results(shown, sort, &palette) {
+        Err(e) if e.kind() == io::ErrorKind::BrokenPipe => Ok(()),
+        result => Ok(result?),
     }
-    out.flush()?;
-    Ok(())
+}
+
+fn write_results(results: &[ScoredEntry], sort: Formula, palette: &Palette) -> io::Result<()> {
+    let mut out = BufWriter::new(io::stdout().lock());
+    for scored in results {
+        write_entry(&mut out, scored, sort, palette)?;
+    }
+    out.flush()
 }
