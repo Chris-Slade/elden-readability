@@ -35,6 +35,8 @@ cargo run --release -- --dir <path> [OPTIONS]
 | `--limit <n>` | none | Maximum number of entries to print. |
 | `--min-words <n>` | `0` | Skip entries with fewer than `n` words. |
 | `--dale-chall-list <file>` | none | Word list of familiar words for the Dale-Chall score, separated by whitespace. Inflected forms of listed words (plurals, possessives, `-ed`, `-ing`, `-er`, `-est`, `-ly`) and hyphenated compounds of listed words also count as familiar. Without this option, readsight's approximation is used, which counts every word with more than one syllable as difficult. |
+| `--color [<when>]` | `auto` | Color the output. Options for `<when>` are `auto`, `always`, and `never`. Respects the
+[`NO_COLOR`](https://no-color.org) environment variable. |
 | `--dir <path>` | required | Directory containing the game text files. |
 
 Entries are printed from most to least complex, with ties ordered by their text.

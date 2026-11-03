@@ -1,5 +1,6 @@
 mod dale_chall;
 mod dedupe;
+mod style;
 
 use std::error::Error;
 use std::fs;
@@ -14,6 +15,7 @@ use readsight::{ReadSight, TextStatistics};
 
 use dale_chall::DaleChallList;
 use dedupe::{Group, dedupe};
+use style::{ColorWhen, Palette, Style};
 
 const PLACEHOLDERS: [&str; 2] = ["%null%", "(dummyText)"];
 const SENTENCE_ENDINGS: [char; 3] = ['.', '!', '?'];
@@ -34,11 +36,21 @@ struct Args {
     #[arg(long, value_name = "FILE")]
     dale_chall_list: Option<PathBuf>,
 
+    #[arg(
+        long,
+        value_enum,
+        value_name = "WHEN",
+        num_args = 0..=1,
+        default_value_t = ColorWhen::Auto,
+        default_missing_value = "auto"
+    )]
+    color: ColorWhen,
+
     #[arg(long)]
     dir: PathBuf,
 }
 
-#[derive(Clone, Copy, ValueEnum)]
+#[derive(Clone, Copy, PartialEq, ValueEnum)]
 enum Formula {
     FleschReadingEase,
     FleschKincaidGradeLevel,
@@ -66,8 +78,28 @@ impl Formula {
         }
     }
 
+    fn easy_and_hard_scores(self) -> (f64, f64) {
+        match self {
+            Formula::FleschReadingEase => (90.0, 30.0),
+            Formula::FleschKincaidGradeLevel
+            | Formula::Smog
+            | Formula::ColemanLiau
+            | Formula::Ari => (6.0, 16.0),
+            Formula::GunningFog => (6.0, 17.0),
+            Formula::Lix => (25.0, 60.0),
+            Formula::DaleChall => (4.9, 9.9),
+            Formula::Spache => (1.0, 4.0),
+        }
+    }
+
     fn higher_is_harder(self) -> bool {
-        !matches!(self, Formula::FleschReadingEase)
+        let (easy, hard) = self.easy_and_hard_scores();
+        hard > easy
+    }
+
+    fn difficulty(self, score: f64) -> f64 {
+        let (easy, hard) = self.easy_and_hard_scores();
+        (score - easy) / (hard - easy)
     }
 }
 
@@ -258,23 +290,38 @@ fn score(
     }))
 }
 
-fn write_entry(out: &mut impl Write, scored: &ScoredEntry, sort: Formula) -> io::Result<()> {
+fn write_entry(
+    out: &mut impl Write,
+    scored: &ScoredEntry,
+    sort: Formula,
+    palette: &Palette,
+) -> io::Result<()> {
     let ScoredEntry {
         entry,
         duplicates,
         scores,
     } = scored;
+    let format_score = |formula: Formula, emphasis: &[Style]| {
+        let score = scores.get(formula);
+        let difficulty = [Style::Difficulty(formula.difficulty(score))];
+        format!(
+            "{}={}",
+            palette.paint(emphasis, formula.id()),
+            palette.paint(&[emphasis, &difficulty].concat(), score)
+        )
+    };
     writeln!(
         out,
-        "[{} #{}] {}={}",
-        entry.source,
-        entry.id,
-        sort.id(),
-        scores.get(sort)
+        "{} {}",
+        palette.paint(
+            &[Style::Source],
+            format!("[{} #{}]", entry.source, entry.id)
+        ),
+        format_score(sort, &[Style::Bold])
     )?;
     let all: Vec<String> = Formula::value_variants()
         .iter()
-        .map(|f| format!("{}={}", f.id(), scores.get(*f)))
+        .map(|&f| format_score(f, if f == sort { &[Style::Bold] } else { &[] }))
         .collect();
     writeln!(out, "  {}", all.join(" "))?;
     if !duplicates.is_empty() {
@@ -322,9 +369,10 @@ fn main() -> Result<(), Box<dyn Error>> {
         ordering.then_with(|| a.entry.text.cmp(&b.entry.text))
     });
 
+    let palette = Palette::for_stdout(args.color);
     let mut out = BufWriter::new(io::stdout().lock());
     for scored in results.iter().take(args.limit.unwrap_or(usize::MAX)) {
-        write_entry(&mut out, scored, sort)?;
+        write_entry(&mut out, scored, sort, &palette)?;
     }
     out.flush()?;
     Ok(())
