@@ -1,3 +1,5 @@
+mod dale_chall;
+
 use std::error::Error;
 use std::fs;
 use std::io::{self, BufWriter, Write};
@@ -8,6 +10,8 @@ use quick_xml::Reader;
 use quick_xml::escape::resolve_predefined_entity;
 use quick_xml::events::Event;
 use readsight::{ReadSight, TextStatistics};
+
+use dale_chall::DaleChallList;
 
 const PLACEHOLDERS: [&str; 2] = ["%null%", "(dummyText)"];
 const SENTENCE_ENDINGS: [char; 3] = ['.', '!', '?'];
@@ -24,6 +28,9 @@ struct Args {
 
     #[arg(long, default_value_t = 0)]
     min_words: i64,
+
+    #[arg(long, value_name = "FILE")]
+    dale_chall_list: Option<PathBuf>,
 
     #[arg(long)]
     dir: PathBuf,
@@ -81,7 +88,12 @@ struct Scores {
 }
 
 impl Scores {
-    fn compute(rs: &ReadSight, stats: &TextStatistics) -> readsight::Result<Self> {
+    fn compute(
+        rs: &ReadSight,
+        text: &str,
+        stats: &TextStatistics,
+        dale_chall_list: Option<&DaleChallList>,
+    ) -> readsight::Result<Self> {
         let calc = |f: Formula| {
             rs.registry()
                 .calculate(f.id(), rs.language(), stats)
@@ -95,7 +107,10 @@ impl Scores {
             coleman_liau: calc(Formula::ColemanLiau)?,
             ari: calc(Formula::Ari)?,
             lix: calc(Formula::Lix)?,
-            dale_chall: calc(Formula::DaleChall)?,
+            dale_chall: match dale_chall_list {
+                Some(list) => list.score(text, stats),
+                None => calc(Formula::DaleChall)?,
+            },
             spache: calc(Formula::Spache)?,
         })
     }
@@ -216,14 +231,19 @@ fn split_lines_into_sentences(text: &str) -> String {
         .join("\n")
 }
 
-fn score(rs: &ReadSight, entry: Entry, min_words: i64) -> readsight::Result<Option<ScoredEntry>> {
+fn score(
+    rs: &ReadSight,
+    entry: Entry,
+    min_words: i64,
+    dale_chall_list: Option<&DaleChallList>,
+) -> readsight::Result<Option<ScoredEntry>> {
     let text = split_lines_into_sentences(&entry.text);
     let stats = match rs.analyze(&text) {
         Ok(stats) if stats.word_count >= min_words => stats,
         Ok(_) | Err(readsight::Error::EmptyText) => return Ok(None),
         Err(e) => return Err(e),
     };
-    let scores = Scores::compute(rs, &stats)?;
+    let scores = Scores::compute(rs, &text, &stats, dale_chall_list)?;
     Ok(Some(ScoredEntry { entry, scores }))
 }
 
@@ -251,11 +271,16 @@ fn write_entry(out: &mut impl Write, scored: &ScoredEntry, sort: Formula) -> io:
 fn main() -> Result<(), Box<dyn Error>> {
     let args = Args::parse();
     let rs = ReadSight::new("en-us")?;
+    let dale_chall_list = args
+        .dale_chall_list
+        .as_deref()
+        .map(|path| DaleChallList::load(path, rs.language()))
+        .transpose()?;
 
     let mut results = Vec::new();
     for path in source_files(&args.dir)? {
         for entry in parse_fmg(&path)? {
-            if let Some(scored) = score(&rs, entry, args.min_words)? {
+            if let Some(scored) = score(&rs, entry, args.min_words, dale_chall_list.as_ref())? {
                 results.push(scored);
             }
         }

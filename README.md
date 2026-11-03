@@ -10,7 +10,9 @@ The lore in FromSoft games is notoriously difficult to understand. Sometimes tha
 
 > The spiral is a normalized Crucible current that, one day, will form a column that stretches to the gods.
 
-Some of the difficulty comes from the game's recondite vocabulary choices, often the result of translating certain kanji into English while preserving the archaic style of the original. Some readability metrics used here, such as Flesch-Kincaide, Coleman-Liau, Gunning fog, Lix, and SMOG, only look at word and syllable counts (or worse, letter counts), which will overindex on sentences with polysyllabic but otherwise uncomplicated word choices. The Dale-Chall readability score and Spache readability formula instead focus on the prevalence of "difficult words" and may yield a more accurate measure of crypticness.
+Some of the difficulty comes from the game's recondite vocabulary choices, often the result of translating certain kanji into English while preserving the archaic style of the original. Some readability metrics used here, such as Flesch-Kincaide, Coleman-Liau, Gunning fog, Lix, and SMOG, only look at word and syllable counts (or worse, letter counts), which will overindex on sentences with polysyllabic but otherwise uncomplicated word choices. The Dale-Chall readability score[^1] and Spache readability formula instead focus on the prevalence of "difficult words" and may yield a more accurate measure of crypticness.
+
+[^1]: `readsight`'s implementation uses a simplified approach that treats every word with one syllable as difficult, rather than using the original list of 3,000 words proposed by Dale and Chall. Because of that it might actually be worse than the other metrics. To get the proper score, pass the `--dale-chall-list` to specify a word list to use.
 
 # Setup
 
@@ -32,6 +34,7 @@ cargo run --release -- --dir <path> [OPTIONS]
 | `--sort <formula>` | `flesch-kincaid-grade-level` | Formula to rank by. One of `flesch-reading-ease`, `flesch-kincaid-grade-level`, `gunning-fog`, `smog`, `coleman-liau`, `ari`, `lix`, `dale-chall`, `spache`. |
 | `--limit <n>` | none | Maximum number of entries to print. |
 | `--min-words <n>` | `0` | Skip entries with fewer than `n` words. |
+| `--dale-chall-list <file>` | none | Word list of familiar words for the Dale-Chall score, separated by whitespace. Inflected forms of listed words (plurals, possessives, `-ed`, `-ing`, `-er`, `-est`, `-ly`) and hyphenated compounds of listed words also count as familiar. Without this option, readsight's approximation is used, which counts every word with more than one syllable as difficult. |
 | `--dir <path>` | required | Directory containing the game text files. |
 
 Entries are printed from most to least complex, with ties ordered by their text.
