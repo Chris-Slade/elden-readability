@@ -1,0 +1,8 @@
+[package]
+name = "elden_readability"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+quick-xml = "0.42.0"
+readsight = "1.0.2"
