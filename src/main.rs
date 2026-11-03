@@ -1,4 +1,5 @@
 mod dale_chall;
+mod dedupe;
 
 use std::error::Error;
 use std::fs;
@@ -12,6 +13,7 @@ use quick_xml::events::Event;
 use readsight::{ReadSight, TextStatistics};
 
 use dale_chall::DaleChallList;
+use dedupe::{Group, dedupe};
 
 const PLACEHOLDERS: [&str; 2] = ["%null%", "(dummyText)"];
 const SENTENCE_ENDINGS: [char; 3] = ['.', '!', '?'];
@@ -132,6 +134,7 @@ impl Scores {
 
 struct ScoredEntry {
     entry: Entry,
+    duplicates: Vec<Entry>,
     scores: Scores,
 }
 
@@ -233,10 +236,14 @@ fn split_lines_into_sentences(text: &str) -> String {
 
 fn score(
     rs: &ReadSight,
-    entry: Entry,
+    group: Group<Entry>,
     min_words: i64,
     dale_chall_list: Option<&DaleChallList>,
 ) -> readsight::Result<Option<ScoredEntry>> {
+    let Group {
+        representative: entry,
+        duplicates,
+    } = group;
     let text = split_lines_into_sentences(&entry.text);
     let stats = match rs.analyze(&text) {
         Ok(stats) if stats.word_count >= min_words => stats,
@@ -244,11 +251,19 @@ fn score(
         Err(e) => return Err(e),
     };
     let scores = Scores::compute(rs, &text, &stats, dale_chall_list)?;
-    Ok(Some(ScoredEntry { entry, scores }))
+    Ok(Some(ScoredEntry {
+        entry,
+        duplicates,
+        scores,
+    }))
 }
 
 fn write_entry(out: &mut impl Write, scored: &ScoredEntry, sort: Formula) -> io::Result<()> {
-    let ScoredEntry { entry, scores } = scored;
+    let ScoredEntry {
+        entry,
+        duplicates,
+        scores,
+    } = scored;
     writeln!(
         out,
         "[{} #{}] {}={}",
@@ -262,6 +277,13 @@ fn write_entry(out: &mut impl Write, scored: &ScoredEntry, sort: Formula) -> io:
         .map(|f| format!("{}={}", f.id(), scores.get(*f)))
         .collect();
     writeln!(out, "  {}", all.join(" "))?;
+    if !duplicates.is_empty() {
+        let ids: Vec<String> = duplicates
+            .iter()
+            .map(|d| format!("{} #{}", d.source, d.id))
+            .collect();
+        writeln!(out, "  duplicates: {}", ids.join(", "))?;
+    }
     for line in entry.text.lines() {
         writeln!(out, "    {line}")?;
     }
@@ -277,12 +299,15 @@ fn main() -> Result<(), Box<dyn Error>> {
         .map(|path| DaleChallList::load(path, rs.language()))
         .transpose()?;
 
-    let mut results = Vec::new();
+    let mut entries = Vec::new();
     for path in source_files(&args.dir)? {
-        for entry in parse_fmg(&path)? {
-            if let Some(scored) = score(&rs, entry, args.min_words, dale_chall_list.as_ref())? {
-                results.push(scored);
-            }
+        entries.extend(parse_fmg(&path)?);
+    }
+
+    let mut results = Vec::new();
+    for group in dedupe(entries, |e| &e.text)? {
+        if let Some(scored) = score(&rs, group, args.min_words, dale_chall_list.as_ref())? {
+            results.push(scored);
         }
     }
 

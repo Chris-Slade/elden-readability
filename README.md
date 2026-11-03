@@ -18,7 +18,7 @@ Some of the difficulty comes from the game's recondite vocabulary choices, often
 
 ## Requirements
 
-- A Rust toolchain of version 1.85 or later. Install it with [rustup](https://rustup.rs).
+- A Rust toolchain of version 1.88 or later. Install it with [rustup](https://rustup.rs).
 - The game text in the original XML format, in a directory passed with `--dir`.
 
 The program reads the `*Caption*.fmg.xml` files for item descriptions and `TalkMsg.fmg.xml` for NPC dialogue.
@@ -38,3 +38,5 @@ cargo run --release -- --dir <path> [OPTIONS]
 | `--dir <path>` | required | Directory containing the game text files. |
 
 Entries are printed from most to least complex, with ties ordered by their text.
+
+Near-duplicate entries are merged before scoring, using MinHash signatures over 3-word shingles with an LSH index from [`txtfp`](https://crates.io/crates/txtfp). Entries with an estimated Jaccard similarity of 0.9 or more to an earlier entry are merged into it. This collapses weapon captions repeated for each affinity, upgrade levels of Spirit Ashes, and dialogue lines that differ only in punctuation or capitalization. Only the first entry in each group is scored and shown, and the IDs of the merged entries are listed on its `duplicates:` line.
