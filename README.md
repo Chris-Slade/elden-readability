@@ -31,7 +31,8 @@ cargo run --release -- --dir <path> [OPTIONS]
 
 | Option | Default | Description |
 |---|---|---|
-| `--sort <formula>` | `flesch-kincaid-grade-level` | Formula to rank by. One of `flesch-reading-ease`, `flesch-kincaid-grade-level`, `gunning-fog`, `smog`, `coleman-liau`, `ari`, `lix`, `dale-chall`, `spache`. |
+| `--sort-score <formula>` | `flesch-kincaid-grade-level` | Formula to sort by. One of `flesch-reading-ease`, `flesch-kincaid-grade-level`, `gunning-fog`, `smog`, `coleman-liau`, `ari`, `lix`, `dale-chall`, `spache`. |
+| `--sort-order <order>` | `desc` | `asc` or `desc`, applied to the score number. For every formula except `flesch-reading-ease`, a higher score means harder text, so `desc` lists the hardest entries first. For `flesch-reading-ease`, use `asc` for hardest first. |
 | `--limit <n>` | none | Maximum number of entries to print. |
 | `--min-words <n>` | `0` | Skip entries with fewer than `n` words. |
 | `--dale-chall-list <file>` | none | Word list of familiar words for the Dale-Chall score, separated by whitespace. Inflected forms of listed words (plurals, possessives, `-ed`, `-ing`, `-er`, `-est`, `-ly`) and hyphenated compounds of listed words also count as familiar. Without this option, readsight's approximation is used, which counts every word with more than one syllable as difficult. |
@@ -39,6 +40,6 @@ cargo run --release -- --dir <path> [OPTIONS]
 [`NO_COLOR`](https://no-color.org) environment variable. |
 | `--dir <path>` | required | Directory containing the game text files. |
 
-Entries are printed from most to least complex, with ties ordered by their text.
+Entries with the same score are ordered by their text.
 
 Near-duplicate entries are merged before scoring, using MinHash signatures over 3-word shingles with an LSH index from [`txtfp`](https://crates.io/crates/txtfp). Entries with an estimated Jaccard similarity of 0.9 or more to an earlier entry are merged into it. This collapses weapon captions repeated for each affinity, upgrade levels of Spirit Ashes, and dialogue lines that differ only in punctuation or capitalization. Only the first entry in each group is scored and shown, and the IDs of the merged entries are listed on its `duplicates:` line.

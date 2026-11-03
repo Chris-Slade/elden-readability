@@ -25,7 +25,10 @@ const CLOSING_CHARS: [char; 7] = ['"', '\'', '”', '’', ')', ']', '>'];
 #[command(about = "Rank Elden Ring game text by readability complexity")]
 struct Args {
     #[arg(long, value_enum, default_value_t = Formula::FleschKincaidGradeLevel)]
-    sort: Formula,
+    sort_score: Formula,
+
+    #[arg(long, value_enum, default_value_t = SortOrder::Desc)]
+    sort_order: SortOrder,
 
     #[arg(long)]
     limit: Option<usize>,
@@ -48,6 +51,12 @@ struct Args {
 
     #[arg(long)]
     dir: PathBuf,
+}
+
+#[derive(Clone, Copy, ValueEnum)]
+enum SortOrder {
+    Asc,
+    Desc,
 }
 
 #[derive(Clone, Copy, PartialEq, ValueEnum)]
@@ -90,11 +99,6 @@ impl Formula {
             Formula::DaleChall => (4.9, 9.9),
             Formula::Spache => (1.0, 4.0),
         }
-    }
-
-    fn higher_is_harder(self) -> bool {
-        let (easy, hard) = self.easy_and_hard_scores();
-        hard > easy
     }
 
     fn difficulty(self, score: f64) -> f64 {
@@ -358,13 +362,12 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
     }
 
-    let sort = args.sort;
+    let sort = args.sort_score;
     results.sort_by(|a, b| {
         let ordering = a.scores.get(sort).total_cmp(&b.scores.get(sort));
-        let ordering = if sort.higher_is_harder() {
-            ordering.reverse()
-        } else {
-            ordering
+        let ordering = match args.sort_order {
+            SortOrder::Asc => ordering,
+            SortOrder::Desc => ordering.reverse(),
         };
         ordering.then_with(|| a.entry.text.cmp(&b.entry.text))
     });
